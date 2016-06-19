@@ -1,5 +1,7 @@
 import "PureInterfaces.sol";
 
+// Base Contracts
+
 contract ContractManagerEnabled {
     address cm;
     
@@ -9,7 +11,7 @@ contract ContractManagerEnabled {
         return true;
     }
     
-    function remove() {
+    function destroy() {
         if (msg.sender == cm) suicide(cm);
     }
 }
@@ -24,28 +26,21 @@ contract ActionManagerEnabled is ContractManagerEnabled {
     }
 }
 
+contract UserEnabled is ContractManagerEnabled {
+    
+    function isUser(address addr) internal constant returns (bool) {
+        if (cm != 0x0) {
+            address users = ContractProvider(cm).contracts("users");
+            return Registry(users).check(addr);
+        }
+        return false;
+        
+    }
+}
+
 contract JukeboxEnabled is ContractManagerEnabled {
-    address internal id;
-    address internal jbx;
-    bytes32 internal name;
-    bytes32 internal genre;
-    
-    function returnJbx() returns (address) {
-        return jbx;
-    }
-    
-    function setId(address _id) internal returns (bool) {
-        if (!isJukebox()) return false;
-        if (id != 0x0) return false;
-        if (_id == 0x0) return false;
-        return true;
-    }
-    
-    function validId(address _id) internal constant returns (bool) {
-        if (!isJukebox()) return false;
-        if (id != _id) return false;
-        return true;
-    }
+    bytes32 public name;
+    bytes32 public genre;
     
     function isJukebox() internal constant returns (bool) {
         if (cm != 0x0) {
@@ -55,83 +50,69 @@ contract JukeboxEnabled is ContractManagerEnabled {
         return false;
     }
     
-    function setJbx() internal returns (bool) {
-        if (!isJukebox()) return false;
-        if (jbx != 0x0) return false;
-        jbx = msg.sender;
+    function setName(bytes32 _name) internal returns (bool) {
+        if (name != "") return false;
+        if (_name == "") return false;
+        name = _name;
         return true;
     }
     
-    function add(bytes32 _name, bytes32 _genre) internal returns (bool) {
-        if (!isJukebox()) return false;
-        if (name != "" || genre != "") return false;
-        if (_name == "" || _genre == "") return false;
-        name = _name;
+    function setGenre(bytes32 _genre) internal returns (bool) {
+        if (genre != "") return false;
+        if (_genre == "") return false;
         genre = _genre;
         return true;
     } 
+
+    function remove() {
+        if (isJukebox()) suicide(msg.sender);
+    }
 }
 
 contract ArtistEnabled is JukeboxEnabled {
-    address internal art;
-    uint8 internal price;
-    mapping(address => bool) internal access;
-    bytes data;
+    address public artistAddr;
+    uint8 public price;
     
-    function returnArt() returns (address) {
-        return art;
-    }
-    
-    function returnPrice() returns (uint8) {
-        return price;
-    }
-    
-    function setArt(address addr) internal returns (bool) {
-        if (!isJukebox()) return false;
-        if (art != 0x0) return false;
-        if (addr == 0x0) return false;
-        art = addr;
-        return true;
-    }
+    mapping(address => bool) internal _access;
     
     function setPrice(uint8 _price) internal returns (bool) {
-        if (!isJukebox()) return false;
         if (price != 0) return false;
         if (!(_price > 0)) return false; 
         price = _price;
         return true;
     }
     
-    function play(address listener) internal returns (bool) {
-        if (!isJukebox()) return false;
-        if (!access[listener]) return false;
-        address(this).call(data);
+    function setArtist(address _artistAddr) internal returns (bool) {
+        if (artistAddr != 0x0) return false;
+        if (_artistAddr == 0x0) return false;
+        artistAddr = _artistAddr;
         return true;
     }
     
-    function purchase(address buyer) internal returns (bool) {
+    function access(address accessor) internal returns (bool) {
         if (!isJukebox()) return false;
         if (!(price > 0)) return false;
-        if (buyer == id) return false;
-        if (access[buyer]) return false;
-        id.send(price);
-        access[buyer] = true;
+        if (_access[accessor]) return false;
+        _access[accessor] = true;
+        return true;
+    }
+    
+    function get(address getter) internal returns (bool) {
+        if (!isJukebox()) return false;
+        if (!_access[getter]) return false;
+        // retrieve content from C3D-P2P network
+        // send content to listener
         return true;
     }
 }
 
 contract AlbumEnabled is ArtistEnabled {
-    address internal alb; 
+    address public albumAddr; 
     
-    function returnAlb() returns (address) {
-        return alb;
-    }
-    
-    function setAlb(address addr) internal returns (bool) {
-        if (!isJukebox()) return false;
-        if (alb != 0x0) return false;
-        if (addr == 0x0) return false;
-        alb == addr;
+    function setAlbum(address _albumAddr) internal returns (bool) {
+        if (albumAddr != 0x0) return false;
+        if (_albumAddr == 0x0) return false;
+        albumAddr == _albumAddr;
         return true;
     }
 }

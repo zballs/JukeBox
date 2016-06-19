@@ -1,41 +1,42 @@
-import "BaseContracs.sol";
+import "BaseContracts.sol";
+import "Managers.sol";
+import "Databases.sol";
 
+// Action 
 contract Action is ActionManagerEnabled, Validee {
-    uint8 public permission;
+    uint8 public perm;
     
-    function setPermission(uint8 permVal) returns (bool) {
+    function setPerm(uint8 permVal) returns (bool) {
         if (!validate()) return false;
-        permission = permVal;
+        perm = permVal;
         return true;
     }
 }
 
+// Action-related actions 
 contract AddAction is Action {
     function execute(bytes32 name, address addr) returns (bool) {
         if (!isActionManager()) return false;
-        ContractProvider cp = ContractProvider(cm);
-        address actionDb = cp.contracts("actiondb");
+        address actionDb = ContractProvider(cm).contracts("actiondb");
         if (actionDb == 0x0) return false;
-        return ActionDb(actionDb).addAction(name,addr);
+        return ActionDb(actionDb).add(name,addr);
     }
 }
 
 contract RemoveAction is Action {
     function execute(bytes32 name) returns (bool) {
         if (!isActionManager()) return false;
-        ContractProvider cp = ContractProvider(cm);
-        address actionDb = cp.contracts("actiondb");
+        address actionDb = ContractProvider(cm).contracts("actiondb");
         if (actionDb == 0x0) return false;
         if (name == "addaction") return false;
-        return ActionDb(actionDb).removeAction(name);
+        return ActionDb(actionDb).remove(name);
     }
 }
 
 contract LockActions is Action {
     function execute() returns (bool) {
         if (!isActionManager()) return false;
-        ContractProvider cp = ContractProvider(cm);
-        address action_manager = cp.contracts("actions");
+        address action_manager = ContractProvider(cm).contracts("actions");
         if (action_manager == 0x0) return false;
         return ActionManager(action_manager).lock();
     }
@@ -44,101 +45,154 @@ contract LockActions is Action {
 contract UnlockActions is Action {
     function execute() returns (bool) {
         if (!isActionManager()) return false;
-        ContractProvider cp = ContractProvider(cm);
-        address action_manager = cp.contracts("actions");
+        address action_manager = ContractProvider(cm).contracts("actions");
         if (action_manager == 0x0) return false;
         return ActionManager(action_manager).unlock();
-    }
-}
-
-contract AddContract is Action {
-    function execute(bytes32 name, address addr) returns (bool) {
-        if (!isActionManager()) return false;
-        ContractManager contract_manager = ContractManager(cm);
-        return contract_manager.addContract(name,addr);
-    }
-}
-
-contract RemoveContract is Action {
-    function execute(bytes32 name) returns (bool) {
-        if (!isActionManager()) return false;
-        ContractManager contract_manager = ContractManager(cm);
-        return contract_manager.removeContract(name);
-    }
-}
-
-contract SetUserPermissions is Action {
-    function execute(address addr, uint8 perm) returns (bool) {
-        if (!isActionManager()) return false;
-        ContractProvider cp = ContractProvider(cm);
-        address perms = cp.contracts("perms");
-        if (perms == 0x0) return false;
-        return Permissions(perms).setPermission(addr,perm);
     }
 }
 
 contract SetActionPermissions is Action {
     function execute(bytes32 name, uint8 perm) returns (bool) {
         if (!isActionManager()) return false;
-        ContractProvider cp = ContractProvider(cm);
-        address actionDb = cp.contracts("actiondb");
+        address actionDb = ContractProvider(cm).contracts("actiondb");
         if (actionDb == 0x0) return false;
         address actn = ActionDb(actionDb).actions(name);
         if (actn == 0x0) return false;
-        return Action(actn).setPermission(perm);
+        return Permissioner(actn).setPerm(perm);
     }
 }
 
-// Artist, Album, Song add
+// Contract-related actions
+contract AddContract is Action {
+    function execute(bytes32 name, address addr) returns (bool) {
+        if (!isActionManager()) return false;
+        return ContractManager(cm).add(name,addr);
+    }
+}
 
-contract AddArtist is Action {
+contract RemoveContract is Action {
+    function execute(bytes32 name) returns (bool) {
+        if (!isActionManager()) return false;
+        return ContractManager(cm).remove(name);
+    }
+}
+
+// User-related actions
+contract RegisterUser is Action {
+    function execute(bytes32 name) returns (bool) {
+        if (!isActionManager()) return false;
+        address users = ContractProvider(cm).contracts("users");
+        if (users == 0x0) return false;
+        return Registry(users).register(name);
+    }
+}
+
+contract UnregisterUser is Action {
+    function execute(bytes32 name) returns (bool) {
+        if (!isActionManager()) return false;
+        address users = ContractProvider(cm).contracts("users");
+        if (users == 0x0) return false;
+        return Registry(users).unregister(name);
+    }
+}
+
+contract SetUserPermissions is Action {
+    function execute(address addr, uint8 perm) returns (bool) {
+        if (!isActionManager()) return false;
+        address users = ContractProvider(cm).contracts("users");
+        if (users == 0x0) return false;
+        if (!Registry(users).check(addr)) return false;
+        address permissions = ContractProvider(cm).contracts("permissions");
+        if (permissions == 0x0) return false;
+        return Permissioner(permissions).setPerm(addr,perm);
+    }
+}
+
+// User action
+contract UserAction is Action, UserEnabled {
+    function UserCheck() returns (bool) {
+        if (!isActionManager()) return false;
+        address caller = ActionManager(msg.sender).caller();
+        if (!isUser(caller)) return false;
+        return true;
+    }
+}
+
+// Artist, Album, Song adds 
+contract AddArtist is UserAction {
     function execute(bytes32 name, bytes32 genre) returns (bool) {
-        if (!isActionManager()) return false;
-        ContractProvider cp = ContractProvider(cm);
-        address jukebox = cp.contracts("jukebox");
+        if (!UserCheck()) return false;
+        address jukebox = ContractProvider(cm).contracts("jukebox");
         if (jukebox == 0x0) return false;
-        return Adder(jukebox).addArtist(name,genre);
+        return UserInterface(jukebox).addArtist(name,genre);
     }
 }
 
-contract AddAlbum is Action {
-    function execute(bytes32 title, bytes32 genre, address artist, uint8 price) returns (bool) {
-        if (!isActionManager()) return false;
-        ContractProvider cp = ContractProvider(cm);
-        address jukebox = cp.contracts("jukebox");
+contract AddAlbum is UserAction {
+    function execute(bytes32 name, bytes32 genre, uint8 price) returns (bool) {
+        if (!UserCheck()) return false;
+        address jukebox = ContractProvider(cm).contracts("jukebox");
         if (jukebox == 0x0) return false;
-        return Adder(jukebox).addAlbum(title,genre,artist,price);
+        return UserInterface(jukebox).addAlbum(name,genre,price);
     }
 }
 
-contract AddSong is Action {
-    function execute(bytes32 title, bytes32 genre, address album_or_artist, uint8 price) returns (bool) {
-        if (!isActionManager()) return false;
-        ContractProvider cp = ContractProvider(cm);
-        address jukebox = cp.contracts("jukebox");
+contract AddSong is UserAction {
+    function execute(bytes32 name, bytes32 genre, uint8 price, address albumAddr) returns (bool) {
+        if (!UserCheck()) return false;
+        address jukebox = ContractProvider(cm).contracts("jukebox");
         if (jukebox == 0x0) return false;
-        return Adder(jukebox).addSong(title,genre,album_or_artist,price);
+        return UserInterface(jukebox).addSong(name,genre,price,albumAddr);
     }
 }
 
-// Album, Song purchase
-contract Purchase is Action {
-    function execute(address song_or_album) returns (bool) {
-        if (!isActionManager()) return false;
-        ContractProvider cp = ContractProvider(cm);
-        address jukebox = cp.contracts("jukebox");
+// Artist, Album, Song removals
+contract RemoveArtist is UserAction {
+    function execute(address artistAddr) returns (bool) {
+        if (!UserCheck()) return false;
+        address jukebox = ContractProvider(cm).contracts("jukebox");
         if (jukebox == 0x0) return false;
-        bool success = Purchaser(jukebox).purchase(song_or_album);
+        return UserInterface(jukebox).removeArtist(artistAddr);
+    }
+}
+
+contract RemoveAlbum is UserAction {
+    function execute(address albumAddr) returns (bool) {
+        if (!UserCheck()) return false;
+        address jukebox = ContractProvider(cm).contracts("jukebox");
+        if (jukebox == 0x0) return false;
+        return UserInterface(jukebox).removeAlbum(albumAddr);
+    }
+}
+
+contract RemoveSong is UserAction {
+    function execute(address songAddr, bool justFromAlbum) returns (bool) {
+        if (!UserCheck()) return false;
+        address jukebox = ContractProvider(cm).contracts("jukebox");
+        if (jukebox == 0x0) return false;
+        return UserInterface(jukebox).removeSong(songAddr,justFromAlbum);
+    }
+}
+
+
+// Content distribution
+contract AccessContent is UserAction {
+    function execute(address addr) returns (bool) {
+        if (!UserCheck()) return false;
+        address jukebox = ContractProvider(cm).contracts("jukebox");
+        if (jukebox == 0x0) return false;
+        bool success = UserInterface(jukebox).access(addr);
+        return true;
     } 
 }
 
-// Album, Song play
-contract Play is Action {
-    function execute(address song_or_album) returns (bool) {
-        if (!isActionManager()) return false;
-        ContractProvider cp = ContractProvider(cm);
-        address jukebox = cp.contracts("jukebox");
+contract GetContent is UserAction {
+    function execute(address addr) returns (bool) {
+        if (!UserCheck()) return false;
+        address jukebox = ContractProvider(cm).contracts("jukebox");
         if (jukebox == 0x0) return false;
-        return Player(jukebox).play(song_or_album);
+        return UserInterface(jukebox).get(addr);
     }
 }
+
+

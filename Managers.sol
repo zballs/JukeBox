@@ -1,4 +1,7 @@
 import "BaseContracts.sol";
+import "Databases.sol";
+
+// Contract Manager
 
 contract ContractManager {
     
@@ -9,10 +12,9 @@ contract ContractManager {
         owner = msg.sender;
     }
     
-    function addContract(bytes32 name, address addr) returns (bool) {
+    function add(bytes32 name, address addr) returns (bool) {
         var action_manager = contracts["actions"];
-        var actionDb = contracts["actiondb"];
-        if (action_manager != 0x0 || actionDb == 0x0) {
+        if (action_manager != 0x0) {
             bool validated = Validator(action_manager).validate(msg.sender);
             if (!validated) return false;
         }
@@ -22,24 +24,25 @@ contract ContractManager {
         return true;
     }
     
-    function removeContract(bytes32 name) returns (bool) {
+    function remove(bytes32 name) returns (bool) {
         var action_manager = contracts["actions"];
-        var actionDb = contracts["actiondb"];
-        if (action_manager != 0x0 || actionDb == 0x0) {
+        if (action_manager != 0x0) {
             bool validated = Validator(action_manager).validate(msg.sender);
             if (!validated) return false;
         }
         address contractAddr = contracts[name];
         if (contractAddr == 0x0) return false;
-        ContractManagerEnabled(contractAddr).remove();
+        ContractManagerEnabled(contractAddr).destroy();
         contracts[name] = 0x0;
         return true;
     }
     
-    function remove() {
+    function destroy() {
         if (msg.sender == owner) suicide(owner);
     }
 }
+
+// Action Manager 
 
 contract ActionManager is ContractManagerEnabled {
     
@@ -53,7 +56,7 @@ contract ActionManager is ContractManagerEnabled {
     bool LOGGING = true;
     
     address activeAction;
-    address caller;
+    address public caller;
     uint8 permToLock = 255;
     bool locked;
     
@@ -62,14 +65,6 @@ contract ActionManager is ContractManagerEnabled {
     
     function ActionManager() {
         permToLock = 255;
-    }
-    
-    function returnCaller() returns (address) {
-        return caller;
-    }
-    
-    function returnActiveAction() returns (address) {
-        return activeAction;
     }
     
     function execute(bytes32 actionName, bytes data) returns (bool) {
@@ -84,16 +79,15 @@ contract ActionManager is ContractManagerEnabled {
             _log(actionName,false);
             return false;
         }
-        address perms = ContractProvider(cm).contracts("perms");
-        if (perms != 0x0) {
-            Permissions p = Permissions(perms);
-            uint8 perm = p.perms(msg.sender);
-            if (locked && perm < permToLock) {
+        address permissions = ContractProvider(cm).contracts("permissions");
+        if (permissions != 0x0) {
+            uint8 userperm = Permissioner(permissions).perms(caller);
+            if (locked && userperm < permToLock) {
                 _log(actionName,false);
                 return false;
             }
-            uint8 permReq = Action(actn).permission();
-            if (perm < permReq) {
+            uint8 permReq = Permissioner(actn).perm();
+            if (userperm < permReq) {
                 _log(actionName,false);
                 return false;
             }
